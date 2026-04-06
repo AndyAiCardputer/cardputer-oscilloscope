@@ -1,0 +1,21 @@
+# PlatformIO
+.pio/
+lib/
+libdeps/
+
+# Build
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*~
+*.tmp
+*.log
+__pycache__/

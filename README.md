@@ -1,0 +1,153 @@
+# Pocket Oscilloscope & Signal Generator for M5Stack Cardputer
+
+A pocket test equipment set for **M5Stack Cardputer** (ESP32-S3): oscilloscope + signal generator.
+
+Works on both **Cardputer v1.1** and **Cardputer ADV** hardware.
+
+## Projects
+
+| Project | Device | Display | Description |
+|---------|--------|---------|-------------|
+| [oscilloscope](oscilloscope/) | Cardputer v1.1 | Internal 240x135 | Single-channel oscilloscope with DMA ADC |
+| [oscilloscope_adv](oscilloscope_adv/) | Cardputer ADV | External ILI9341 320x240 | Oscilloscope on larger external display |
+| [oscilloscope_adv_internal](oscilloscope_adv_internal/) | Cardputer ADV | Internal 240x135 | Oscilloscope on ADV internal display |
+| [signal_generator](signal_generator/) | Cardputer v1.1 | Internal 240x135 | 4-waveform signal generator |
+| [signal_generator_adv](signal_generator_adv/) | Cardputer ADV | Internal 240x135 | 4-waveform signal generator for ADV |
+
+## Features
+
+### Oscilloscope
+- DMA-accelerated ADC sampling (up to 83 kSps)
+- 11 time scales (10 us/div to 50 ms/div)
+- 5 voltage scales (100 mV/div to 1.65 V/div)
+- Auto / Normal / Single trigger modes
+- Frequency counter, Vpp/Vmin/Vmax measurements
+- Two-point calibration (voltage + frequency)
+- Built-in test signal generator on GPIO 2
+- Auto-scale
+
+### Signal Generator
+- 4 waveform types: Square, Sine, Triangle, Sawtooth
+- Square wave: hardware LEDC PWM, 1 Hz - 100 kHz
+- Sine/Triangle/Sawtooth: software-generated, up to ~2 kHz
+- Adjustable frequency and duty cycle
+- Waveform preview on screen
+
+## Hardware Connection
+
+```
+Signal Generator                          Oscilloscope
+Cardputer (v1.1 or ADV)                  Cardputer (v1.1 or ADV)
+
+  Grove G2 (GPIO 2) ---[1k R]---+------> Grove G1 (GPIO 1)
+                                 |
+                            [100nF cap]
+                                 |
+  Grove GND ---------+----------+------> Grove GND
+                      |
+                     GND
+```
+
+The RC filter (1k resistor + 100nF capacitor) is needed for sine/triangle/sawtooth waves.
+Square wave can be connected directly without the filter.
+
+**Input range:** 0 - 3.3V only! Higher voltage will damage the ESP32-S3.
+
+### Self-Test Mode (No External Equipment)
+
+Connect **G1 to G2** on the same Cardputer with a jumper wire. Press **G** to enable
+the built-in test signal and you have a working oscilloscope + signal source.
+
+## Keyboard Controls
+
+### Oscilloscope
+
+| Key | Function |
+|-----|----------|
+| R | Run / Stop |
+| A | Auto-scale voltage |
+| C | Calibrate (needs signal on G1) |
+| T / Y | Trigger level up / down |
+| + / - | Voltage scale (zoom Y) |
+| ; / . | Time scale (zoom X) |
+| F | Toggle frequency counter |
+| M | Trigger mode (Auto/Normal/Single) |
+| G | Toggle test signal generator |
+| H / J | Test signal frequency up / down |
+
+### Signal Generator
+
+| Key | Function |
+|-----|----------|
+| W | Cycle waveform (Square/Sine/Triangle/Sawtooth) |
+| + / - | Frequency up / down |
+| D | Duty cycle adjust (square wave only) |
+| G | Signal on / off |
+
+## Pre-compiled Firmware
+
+Pre-compiled binaries are available in the [firmware](firmware/) folder.
+
+| Binary | Device | Size |
+|--------|--------|------|
+| `oscilloscope_v1.1.bin` | Cardputer v1.1 | 446 KB |
+| `oscilloscope_adv_ext.bin` | Cardputer ADV + external ILI9341 | 448 KB |
+| `oscilloscope_adv_int.bin` | Cardputer ADV (internal display) | 446 KB |
+| `signal_generator_v1.1.bin` | Cardputer v1.1 | 441 KB |
+| `signal_generator_adv.bin` | Cardputer ADV | 441 KB |
+
+### Flash with esptool
+
+```bash
+esptool.py --chip esp32s3 --port /dev/cu.usbmodemXXXXX --baud 460800 \
+  write_flash 0x10000 firmware/oscilloscope_v1.1.bin
+```
+
+Replace the port and binary filename as needed.
+
+## Building from Source
+
+All projects use [PlatformIO](https://platformio.org/) with `espressif32@6.9.0` platform.
+
+```bash
+cd <project_folder>
+pio run                  # compile
+pio run -t upload        # flash
+pio device monitor       # serial output (115200 baud)
+```
+
+### Dependencies
+
+- `m5stack/M5Cardputer @ ^1.1.1`
+- `m5stack/M5Unified @ ^0.2.10`
+- `m5stack/M5GFX @ ^0.2.17`
+- Platform: `espressif32 @ 6.9.0`
+- Board: `m5stack-stamps3`
+
+## Technical Notes
+
+1. **Cardputer v1.1 vs ADV:** The v1.1 uses a GPIO matrix keyboard, so I2C drivers
+   can be safely deleted in setup(). The ADV uses a TCA8418 I2C keyboard on GPIO 8/9,
+   so I2C must NOT be deleted.
+
+2. **DMA ADC:** Uses the legacy ESP-IDF 4.x API (`driver/adc.h`, `adc_digi_*`), not
+   the newer ESP-IDF 5.x `adc_continuous` API. This is because `espressif32@6.9.0`
+   (Arduino-ESP32 2.x) is based on ESP-IDF 4.4.
+
+3. **External display (oscilloscope_adv only):** ILI9341 connected via SPI, shares
+   bus with SD card. Pins: SCK=40, MOSI=14, CS=5, DC=6, RST=3.
+
+4. **Signal generator waveforms:** Square wave uses hardware LEDC PWM. Sine, triangle,
+   and sawtooth are generated by rapidly modulating PWM duty at 40 kHz carrier using
+   a FreeRTOS task on Core 0.
+
+## Credits
+
+**Andy** -- project creator, hardware assembly, testing
+**AI** -- code assistance, documentation
+
+April 2026
+
+## License
+
+MIT
