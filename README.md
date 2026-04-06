@@ -148,6 +148,18 @@ pio device monitor       # serial output (115200 baud)
 
 April 2026
 
+## Inspiration & Acknowledgments
+
+This project was inspired by and learned from these awesome projects:
+
+- **[Esp32_oscilloscope](https://github.com/BojanJurca/Esp32_oscilloscope)** by Bojan Jurca -- ESP32 oscilloscope with web browser interface. This is the project that started it all -- seeing signals in a browser made me want to build a standalone oscilloscope on the Cardputer. Great work on DMA ADC sampling and signal visualization.
+
+- **[Scoppy](https://github.com/fhdm-dev/scoppy)** by fhdm-dev -- Raspberry Pi Pico oscilloscope with Android phone display. Amazing example of how a cheap microcontroller can become a real measurement tool. The analog front-end designs in their documentation were especially helpful for understanding voltage dividers and input protection.
+
+- **[ESP32 Oscilloscope video](https://www.youtube.com/watch?v=EaEG2UUcUaQ)** -- YouTube tutorial that helped understand the practical side of building an oscilloscope on ESP32.
+
+Thank you to all these creators for sharing their work openly. Without the open source community, this project would not exist.
+
 ## License
 
 MIT
