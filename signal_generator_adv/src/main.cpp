@@ -1,6 +1,6 @@
 /*
  * Signal Generator ADV Version
- * Version: 2.1.0
+ * Version: 2.2.0
  *
  * Generates square, sine, triangle and sawtooth waves on GPIO 2 (Grove G2).
  * Square wave: hardware LEDC/PWM at signal frequency.
@@ -76,6 +76,7 @@ const int presetCount = sizeof(presetFreqs) / sizeof(presetFreqs[0]);
 // --- State ---
 M5Canvas canvas(&M5Cardputer.Display);
 int currentFreq = 1000;
+int actualFreq = 1000;
 int presetIdx = 9;
 int dutyPercent = 50;
 bool outputOn = true;
@@ -100,7 +101,7 @@ String freqToString(int freq);
 void setup() {
     Serial.begin(115200);
     delay(300);
-    Serial.println("\n=== Signal Generator ADV v2.1.0 ===");
+    Serial.println("\n=== Signal Generator ADV v2.2.0 ===");
 
     auto cfg = M5.config();
     cfg.output_power = true;
@@ -157,7 +158,7 @@ void fillWaveTable(WaveType type) {
                 waveTable[i] = (uint8_t)(255 * (WAVE_TABLE_SIZE - i) * 2 / WAVE_TABLE_SIZE);
             break;
         case WAVE_SAW:
-            waveTable[i] = (uint8_t)(255 * i / WAVE_TABLE_SIZE);
+            waveTable[i] = (uint8_t)(255 * i / (WAVE_TABLE_SIZE - 1));
             break;
         default:
             waveTable[i] = (i < WAVE_TABLE_SIZE / 2) ? 255 : 0;
@@ -224,6 +225,7 @@ void applySignal() {
     stopWaveTask();
 
     if (waveType == WAVE_SQUARE) {
+        actualFreq = currentFreq;
         if (currentFreq >= 50000) ledcBits = 6;
         else if (currentFreq >= 10000) ledcBits = 8;
         else if (currentFreq >= 1000) ledcBits = 10;
@@ -241,17 +243,15 @@ void applySignal() {
         Serial.printf("[SIG] Square %dHz  Duty=%d%%  Bits=%d\n",
                       currentFreq, dutyPercent, ledcBits);
     } else {
+        actualFreq = (currentFreq > WAVE_MAX_FREQ) ? WAVE_MAX_FREQ : currentFreq;
         if (currentFreq > WAVE_MAX_FREQ) {
-            Serial.printf("[SIG] %dHz too high for %s, max %dHz\n",
-                          currentFreq, waveNames[waveType], WAVE_MAX_FREQ);
+            Serial.printf("[SIG] %dHz limited to %dHz for %s\n",
+                          currentFreq, WAVE_MAX_FREQ, waveNames[waveType]);
         }
-        int effectiveFreq = (currentFreq > WAVE_MAX_FREQ) ? WAVE_MAX_FREQ : currentFreq;
         int savedFreq = currentFreq;
-        currentFreq = effectiveFreq;
-
+        currentFreq = actualFreq;
         fillWaveTable(waveType);
         startWaveTask();
-
         currentFreq = savedFreq;
     }
 }
@@ -259,8 +259,7 @@ void applySignal() {
 void stopSignal() {
     stopWaveTask();
     ledcDetachPin(SIG_PIN);
-    gpio_reset_pin(GPIO_NUM_2);
-    gpio_set_pull_mode(GPIO_NUM_2, GPIO_FLOATING);
+    pinMode(SIG_PIN, OUTPUT);
     digitalWrite(SIG_PIN, LOW);
     Serial.println("[SIG] Output OFF");
 }
@@ -276,19 +275,24 @@ void drawUI() {
     canvas.setTextColor(COL_CYAN);
     canvas.setTextSize(1);
     canvas.setCursor(4, 4);
-    canvas.print("SIGNAL GENERATOR ADV v2.1");
+    canvas.print("SIGNAL GENERATOR ADV v2.2");
     canvas.setTextColor(outputOn ? COL_GREEN : COL_RED);
     canvas.setCursor(SCREEN_W - 30, 4);
     canvas.print(outputOn ? " ON" : "OFF");
 
-    // Big frequency display
     uint16_t wCol = waveColors[waveType];
     canvas.setTextColor(wCol);
     canvas.setTextSize(3);
-    String freqStr = freqToString(currentFreq);
+    String freqStr = freqToString(actualFreq);
     int tw = freqStr.length() * 18;
     canvas.setCursor((SCREEN_W - tw) / 2, 22);
     canvas.print(freqStr);
+    if (actualFreq != currentFreq) {
+        canvas.setTextSize(1);
+        canvas.setTextColor(COL_RED);
+        canvas.setCursor((SCREEN_W + tw) / 2 + 4, 30);
+        canvas.print("LIM");
+    }
 
     // Waveform type + duty (for square)
     canvas.setTextSize(2);
@@ -301,11 +305,11 @@ void drawUI() {
         char dutyStr[16];
         snprintf(dutyStr, sizeof(dutyStr), "  Duty:%d%%", dutyPercent);
         canvas.print(dutyStr);
-    } else if (currentFreq > WAVE_MAX_FREQ) {
-        canvas.setTextColor(COL_RED);
+    } else if (waveType != WAVE_SQUARE) {
+        canvas.setTextColor(COL_GRAY);
         canvas.setTextSize(1);
         canvas.setCursor(130, 56);
-        canvas.printf("max %dHz!", WAVE_MAX_FREQ);
+        canvas.print("RC filter");
     }
 
     // Wave preview
@@ -426,22 +430,30 @@ void handleKeyboard() {
     if (M5Cardputer.Keyboard.isKeyPressed('=')) {
         currentFreq = currentFreq + currentFreq / 10;
         if (currentFreq > 200000) currentFreq = 200000;
+        for (int i = 0; i < presetCount - 1; i++) {
+            if (currentFreq <= presetFreqs[i]) { presetIdx = i; break; }
+            presetIdx = i + 1;
+        }
         changed = true;
     }
 
     if (M5Cardputer.Keyboard.isKeyPressed('-')) {
         currentFreq = currentFreq - currentFreq / 10;
         if (currentFreq < 1) currentFreq = 1;
+        for (int i = presetCount - 1; i >= 0; i--) {
+            if (currentFreq >= presetFreqs[i]) { presetIdx = i; break; }
+            presetIdx = 0;
+        }
         changed = true;
     }
 
-    if (M5Cardputer.Keyboard.isKeyPressed('t')) {
+    if (M5Cardputer.Keyboard.isKeyPressed('t') && waveType == WAVE_SQUARE) {
         dutyPercent += 10;
         if (dutyPercent > 90) dutyPercent = 90;
         changed = true;
     }
 
-    if (M5Cardputer.Keyboard.isKeyPressed('y')) {
+    if (M5Cardputer.Keyboard.isKeyPressed('y') && waveType == WAVE_SQUARE) {
         dutyPercent -= 10;
         if (dutyPercent < 10) dutyPercent = 10;
         changed = true;

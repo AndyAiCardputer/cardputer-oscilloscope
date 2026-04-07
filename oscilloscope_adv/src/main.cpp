@@ -1,6 +1,6 @@
 /*
  * Pocket Oscilloscope ADV -- External Display Edition
- * Version: 1.3.0
+ * Version: 1.4.0
  *
  * Single-channel oscilloscope for M5Stack Cardputer ADV
  * with external ILI9341 display (320x240).
@@ -99,7 +99,6 @@ int vScaleIdx = 3;
 int tScaleIdx = 6;   // 1000 us/div
 int triggerLevel = 2048;
 TriggerMode trigMode = TRIG_AUTO;
-bool triggerArmed = true;
 bool singleTriggered = false;
 
 float measuredFreqHz = 0;
@@ -120,7 +119,8 @@ int calAdcMax = 4095;       // ADC reading at 3.3V (HIGH)
 float calFreqFactor = 1.0f; // frequency correction multiplier
 float calVref = 3.3f;       // calibrated reference voltage
 unsigned long calTimestamp = 0;
-const char* calStatus = "";  // status message shown briefly after cal
+const char* calStatus = "";
+bool calOk = false;
 
 // --- Forward Declarations ---
 void setupFastADC();
@@ -324,8 +324,6 @@ void sampleADC_DMA() {
     uint32_t bytesRead = 0;
     int idx = 0;
 
-    unsigned long t0 = micros();
-
     while (idx < SAMPLE_BUFFER_SIZE) {
         esp_err_t ret = adc_digi_read_bytes(frameBuf, DMA_FRAME_SIZE, &bytesRead, 100);
         if (ret == ESP_OK) {
@@ -338,10 +336,9 @@ void sampleADC_DMA() {
         }
     }
 
-    unsigned long elapsed = micros() - t0;
-    actualUsPerSample = (float)elapsed / SAMPLE_BUFFER_SIZE;
-
     adc_digi_stop();
+
+    actualUsPerSample = 1000000.0f / dmaCurRate;
 }
 
 // =============================================
@@ -439,8 +436,14 @@ void drawWaveform(int trigPos) {
 
     // Frequency measurement
     if (showFreq && trigPos >= 0) {
-        float midV = (vMin + vMax) / 2.0f;
-        int midRaw = (int)(midV / VREF * ADC_MAX);
+        int rawMin = ADC_MAX, rawMax = 0;
+        for (int i = 0; i < GRAPH_W; i++) {
+            int sIdx = trigPos + i;
+            if (sIdx >= SAMPLE_BUFFER_SIZE) break;
+            if (sampleBuf[sIdx] < rawMin) rawMin = sampleBuf[sIdx];
+            if (sampleBuf[sIdx] > rawMax) rawMax = sampleBuf[sIdx];
+        }
+        int midRaw = (rawMin + rawMax) / 2;
         int edgeCount = 0;
         int lastEdgeIdx = 0, firstEdgeIdx = 0;
 
@@ -552,8 +555,7 @@ void drawMeasurements() {
         canvas.setTextSize(2);
         int cx = GRAPH_X + GRAPH_W / 2 - 40;
         int cy = GRAPH_Y + GRAPH_H / 2 - 8;
-        bool isOk = (calStatus[4] == 'O');
-        canvas.setTextColor(isOk ? COL_WAVE : COL_TRIGGER);
+        canvas.setTextColor(calOk ? COL_WAVE : COL_TRIGGER);
         canvas.setCursor(cx, cy);
         canvas.print(calStatus);
         canvas.setTextSize(1);
@@ -638,7 +640,6 @@ void handleKeyboard() {
         running = !running;
         if (running && trigMode == TRIG_SINGLE) {
             singleTriggered = false;
-            triggerArmed = true;
         }
     }
 
@@ -676,7 +677,6 @@ void handleKeyboard() {
         trigMode = (TriggerMode)((trigMode + 1) % 3);
         if (trigMode == TRIG_SINGLE) {
             singleTriggered = false;
-            triggerArmed = true;
         }
     }
 
@@ -761,6 +761,7 @@ void runCalibration() {
     Serial.printf("[CAL] ADC min=%d  max=%d  span=%d\n", avgMin, avgMax, vpp);
 
     if (vpp < 500) {
+        calOk = false;
         calStatus = "CAL FAIL: no signal";
         calTimestamp = millis();
         tScaleIdx = savedTscale;
@@ -802,6 +803,7 @@ void runCalibration() {
     }
 
     calibrated = true;
+    calOk = true;
     calStatus = "CAL OK";
     calTimestamp = millis();
     tScaleIdx = savedTscale;
@@ -826,6 +828,7 @@ void autoScale() {
     float vRange = (vMax - vMin) * 1000.0f;
     float needed = vRange * 1.2f / 4.0f;
 
+    vScaleIdx = vScaleCount - 1;
     for (int i = 0; i < vScaleCount; i++) {
         if (vScaleSteps[i] >= needed) {
             vScaleIdx = i;
