@@ -13,6 +13,7 @@ Works on both **Cardputer v1.1** and **Cardputer ADV** hardware.
 | [oscilloscope_adv_internal](oscilloscope_adv_internal/) | Cardputer ADV | Internal 240x135 | Oscilloscope on ADV internal display |
 | [signal_generator](signal_generator/) | Cardputer v1.1 | Internal 240x135 | 4-waveform signal generator |
 | [signal_generator_adv](signal_generator_adv/) | Cardputer ADV | Internal 240x135 | 4-waveform signal generator for ADV |
+| [dds_generator](dds_generator/) | Cardputer v1.1 | Internal 240x135 | DDS signal generator (AD9833, true analog output) |
 
 ## Features
 
@@ -26,12 +27,19 @@ Works on both **Cardputer v1.1** and **Cardputer ADV** hardware.
 - Built-in test signal generator on GPIO 2
 - Auto-scale
 
-### Signal Generator
+### Signal Generator (PWM-based)
 - 4 waveform types: Square, Sine, Triangle, Sawtooth
 - Square wave: hardware LEDC PWM, 1 Hz - 100 kHz
 - Sine/Triangle/Sawtooth: software-generated, up to ~2 kHz
 - Adjustable frequency and duty cycle
 - Waveform preview on screen
+
+### DDS Generator (AD9833, true analog)
+- 5 waveforms: Sine, Triangle, Square, Sawtooth, DC
+- True analog output via DAC (no RC filter needed)
+- Frequency range: 0 Hz to 1 MHz (28-bit resolution)
+- Phase control, sweep mode
+- Requires M5Stack DDS Unit (Grove connection)
 
 ## Hardware Connection
 
@@ -95,6 +103,7 @@ Pre-compiled binaries are available in the [firmware](firmware/) folder.
 | `oscilloscope_adv_int.bin` | Cardputer ADV (internal display) | 446 KB |
 | `signal_generator_v1.1.bin` | Cardputer v1.1 | 441 KB |
 | `signal_generator_adv.bin` | Cardputer ADV | 441 KB |
+| `dds_generator_v1.1.bin` | Cardputer v1.1 + DDS Unit | 459 KB |
 
 ### Flash with esptool
 
